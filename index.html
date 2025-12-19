@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>X / O</title>
+
+<style>
+    body {
+        margin: 0;
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: #f4f6f8;
+        font-family: Arial, sans-serif;
+        color: #222;
+    }
+
+    .game {
+        width: 90%;
+        max-width: 320px;
+        text-align: center;
+    }
+
+    h2 {
+        margin-bottom: 10px;
+    }
+
+    .board {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+    }
+
+    .board.shake {
+        animation: shake 0.4s;
+    }
+
+    .cell {
+        aspect-ratio: 1;
+        background: white;
+        font-size: 2.5rem;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        border-radius: 12px;
+        cursor: pointer;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        transition: 0.3s;
+    }
+
+    .cell.win {
+        background: #4ade80;
+        color: white;
+        animation: pulse 0.8s infinite alternate;
+        box-shadow: 0 0 25px #4ade80;
+    }
+
+    .result {
+        margin-top: 15px;
+        font-size: 2.2rem;
+        font-weight: bold;
+        opacity: 0;
+        transform: scale(0.5);
+        transition: 0.5s;
+    }
+
+    .result.show {
+        opacity: 1;
+        transform: scale(1.3);
+        color: #ef4444;
+        text-shadow: 0 0 20px #ef4444;
+    }
+
+    button {
+        margin-top: 15px;
+        width: 100%;
+        padding: 12px;
+        border: none;
+        border-radius: 10px;
+        background: #2563eb;
+        color: white;
+        font-size: 16px;
+        cursor: pointer;
+    }
+#winImage {
+    display: none;
+    width: 220px;
+    margin: 20px auto;
+}
+
+#winImage.show {
+    display: block;
+}
+
+    @keyframes pulse {
+        from { transform: scale(1); }
+        to { transform: scale(1.15); }
+    }
+
+    @keyframes shake {
+        0% { transform: translateX(0); }
+        25% { transform: translateX(-6px); }
+        50% { transform: translateX(6px); }
+        75% { transform: translateX(-6px); }
+        100% { transform: translateX(0); }
+    }
+</style>
+</head>
+<body>
+
+<div class="game">
+    <h2>X / O</h2>
+    <div class="board" id="board"></div>
+    <div class="result" id="result"></div>
+<img id="winImage" src="win.png" alt="You Win">
+    <button onclick="resetGame()">Restart</button>
+</div>
+
+<script>
+const board = document.getElementById("board");
+const resultText = document.getElementById("result");
+
+let cells = [];
+let gameOver = false;
+let tries = Number(localStorage.getItem("tries")) || 0;
+
+const winPatterns = [
+    [0,1,2],[3,4,5],[6,7,8],
+    [0,3,6],[1,4,7],[2,5,8],
+    [0,4,8],[2,4,6]
+];
+
+// Create board
+for (let i = 0; i < 9; i++) {
+    const cell = document.createElement("div");
+    cell.className = "cell";
+    cell.addEventListener("click", () => playerMove(i));
+    board.appendChild(cell);
+    cells.push(cell);
+}
+
+function playerMove(index) {
+    if (cells[index].textContent || gameOver) return;
+
+    cells[index].textContent = "X";
+    if (checkWinner("X")) return;
+
+    setTimeout(computerMove, 200);
+}
+
+function computerMove() {
+    if (tries >= 3) {
+        randomMove();
+        return;
+    }
+
+    let bestMove = minimax(getBoard(), "O").index;
+    cells[bestMove].textContent = "O";
+    checkWinner("O");
+}
+
+function randomMove() {
+    let empty = getBoard()
+        .map((v, i) => v === "" ? i : null)
+        .filter(v => v !== null);
+
+    if (!empty.length) return;
+    let move = empty[Math.floor(Math.random() * empty.length)];
+    cells[move].textContent = "O";
+    checkWinner("O");
+}
+
+function checkWinner(player) {
+    const current = getBoard();
+    const winImage = document.getElementById("winImage");
+
+    for (let pattern of winPatterns) {
+        if (pattern.every(i => current[i] === player)) {
+            gameOver = true;
+            pattern.forEach(i => cells[i].classList.add("win"));
+
+            if (player === "X") {
+                // SHOW IMAGE INSTEAD OF TEXT
+                winImage.classList.add("show");
+                board.classList.add("shake");
+            } else {
+                autoRestart();
+            }
+
+            return true;
+        }
+    }
+
+    if (!current.includes("")) {
+        gameOver = true;
+        autoRestart();
+    }
+
+    return false;
+}
+
+
+function autoRestart() {
+    tries++;
+    localStorage.setItem("tries", tries);
+
+    resultText.textContent = "TRY AGAIN";
+    resultText.classList.add("show");
+    board.classList.add("shake");
+
+    setTimeout(() => {
+        resultText.classList.remove("show");
+        board.classList.remove("shake");
+
+        cells.forEach(c => {
+            c.textContent = "";
+            c.classList.remove("win");
+        });
+
+        gameOver = false;
+    }, 1200);
+}
+
+
+// ---------- MINIMAX ----------
+function minimax(boardState, player) {
+    const empty = boardState
+        .map((v, i) => v === "" ? i : null)
+        .filter(v => v !== null);
+
+    if (isWinner(boardState, "X")) return { score: -10 };
+    if (isWinner(boardState, "O")) return { score: 10 };
+    if (!empty.length) return { score: 0 };
+
+    let moves = [];
+
+    for (let i of empty) {
+        boardState[i] = player;
+        let score = minimax(boardState, player === "O" ? "X" : "O").score;
+        boardState[i] = "";
+        moves.push({ index: i, score });
+    }
+
+    return player === "O"
+        ? moves.reduce((a,b) => a.score > b.score ? a : b)
+        : moves.reduce((a,b) => a.score < b.score ? a : b);
+}
+
+function isWinner(boardState, player) {
+    return winPatterns.some(p => p.every(i => boardState[i] === player));
+}
+
+function getBoard() {
+    return cells.map(c => c.textContent);
+}
+
+// BUTTON ONLY
+function resetGame() {
+    tries++;
+    localStorage.setItem("tries", tries);
+
+    cells.forEach(c => {
+        c.textContent = "";
+        c.classList.remove("win");
+    });
+
+    resultText.classList.remove("show");
+    board.classList.remove("shake");
+    gameOver = false;
+}
+</script>
+
+</body>
+</html>
